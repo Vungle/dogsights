@@ -3,7 +3,7 @@ Create Datadog Metrics for Insights Queries
 
 # Featrues:
 
-* Binary that runs off a config
+* Go binary that runs off a config
   * ex:
   ```toml
     [general]
