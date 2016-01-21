@@ -1,7 +1,7 @@
 # dogsights
 Create Datadog Metrics for Insights Queries
 
-# Featrues:
+# Features:
 
 * Go binary that runs off a config
   * ex:
