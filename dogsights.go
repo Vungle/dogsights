@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/cactus/go-statsd-client/statsd"
-	"github.com/codeskyblue/go-sh"
-	//"net/url"
 	"encoding/json"
 	"fmt"
+	"github.com/cactus/go-statsd-client/statsd"
+	"github.com/codeskyblue/go-sh"
 	"os"
-	//"strconv"
+	"strconv"
+	"time"
 )
 
 type Insights struct {
@@ -62,24 +62,27 @@ type Insights struct {
 }
 
 func main() {
-
+	interval, _ := strconv.ParseInt(os.Getenv("DOGSIGHTS_INTERVAL"), 10, 64)
 	api_key := os.Getenv("INSIGHTS_API_KEY")
 
-	// Get Response from Insights API
-	url := "https://insights-api.newrelic.com/v1/accounts/752957/query?nrql=SELECT%20count(*)%20FROM%20AdServerEvents%20WHERE%20vungleType%3D%27reportAd%27%20and%20pub_app_id%3D%20%27com.cmplay.tiles2%27"
-	impressions, _ := sh.Command("curl", "-H", "Accept: application/json", "-H", "X-Query-Key: "+api_key, url).Output()
+	for {
+		// Get Response from Insights API
+		url := "https://insights-api.newrelic.com/v1/accounts/752957/query?nrql=SELECT%20count(*)%20FROM%20AdServerEvents%20WHERE%20vungleType%3D%27reportAd%27%20and%20pub_app_id%3D%20%27com.cmplay.tiles2%27"
+		impressions, _ := sh.Command("curl", "-H", "Accept: application/json", "-H", "X-Query-Key: "+api_key, url).Output()
 
-	// Store Response as Struct
-	var insights Insights
-	json.Unmarshal(impressions, &insights)
-	v := insights.Results[0].Count
+		// Store Response as Struct
+		var insights Insights
+		json.Unmarshal(impressions, &insights)
+		v := insights.Results[0].Count
 
-	// Submit Count as Metric to StatsD
-	client, _ := statsd.NewClient("localhost:8125", "impressions")
-	stat := "impressions"
-	fmt.Println(fmt.Sprint(stat, ":", v, "|c"))
-	errr := client.Inc(stat, v, 1)
-	if errr != nil {
-		fmt.Println("Error sending metric: %+v", errr)
+		// Submit Count as Metric to StatsD
+		client, _ := statsd.NewClient("localhost:8125", "impressions")
+		stat := "impressions"
+		fmt.Println(fmt.Sprint(stat, ":", v, "|c"))
+		errr := client.Inc(stat, v, 1)
+		if errr != nil {
+			fmt.Println("Error sending metric: %+v", errr)
+		}
+		time.Sleep(time.Duration(interval) * time.Millisecond)
 	}
 }
