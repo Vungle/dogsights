@@ -1,0 +1,5 @@
+[general]
+frequency="10s"
+
+[impressions]
+nrql="SELECT count(*) FROM AdServerEvents WHERE vungleType='reportAd'  since 2 hour ago  facet pub_app_id  LIMIT 20"
