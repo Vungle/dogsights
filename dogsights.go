@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cactus/go-statsd-client/statsd"
+	_ "github.com/PagerDuty/godspeed"
 	"github.com/codeskyblue/go-sh"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -64,25 +65,55 @@ type Insights struct {
 func main() {
 	interval, _ := strconv.ParseInt(os.Getenv("DOGSIGHTS_INTERVAL"), 10, 64)
 	api_key := os.Getenv("INSIGHTS_API_KEY")
-	statsd_host := os.Getenv("STATSD_HOST")
 
 	for {
 		// Get Response from Insights API
-		url := "https://insights-api.newrelic.com/v1/accounts/752957/query?nrql=SELECT%20count(*)%20FROM%20AdServerEvents%20WHERE%20vungleType%3D%27reportAd%27%20and%20pub_app_id%3D%20%27com.cmplay.tiles2%27"
-		impressions, _ := sh.Command("curl", "-s", "-H", "Accept: application/json", "-H", "X-Query-Key: "+api_key, url).Output()
+		queries := map[string]string{
+			"not_wifi":      "SELECT filter(count(*), WHERE sleep_code='notWifi') FROM AdServerEvents",
+			"pub_not_found": "SELECT filter(count(*), WHERE sleep_code='pubNotFound') FROM AdServerEvents",
+			"pub_dvl":       "SELECT filter(count(*), WHERE sleep_code='pubDvl' ) FROM AdServerEvents",
+			"SELECT filter(count(*), WHERE sleep_code='filtersRemovedAllCampaigns' ) FROM AdServerEvents",
+			"SELECT filter(count(*), WHERE sleep_code='exchangeRemovedAllCampaigns' ) FROM AdServerEvents",
+			"SELECT filter(count(*), WHERE sleep_code='serverError' ) FROM AdServerEvents",
+			"SELECT filter(count(*), WHERE sleep_code='inactivePub') FROM AdServerEvents",
+			"SELECT filter(count(*), WHERE sleep_code='tooBusy') FROM AdServerEvents",
+		}
+		for _, nrql := range queries {
+			account := "752957"
+			domain := "https://insights-api.newrelic.com"
+			path := "/v1/accounts/" + account + "/query?"
+			q := &url.URL{Path: nrql}
+			nrql := q.String()
+			params := "nrql=" + nrql
+			full_url := domain + path + params
+			impressions, _ := sh.Command("curl", "-s", "-H", "Accept: application/json", "-H", "X-Query-Key: "+api_key, full_url).Output()
+			// Store Response as Struct
+			var insights Insights
+			json.Unmarshal(impressions, &insights)
+			v := insights.Results
+			fmt.Printf("%v", v)
+			// Submit Count as Metric
+			g, err := godspeed.NewDefault()
 
-		// Store Response as Struct
-		var insights Insights
-		json.Unmarshal(impressions, &insights)
-		v := insights.Results[0].Count
+			if err != nil {
+				// handle error
+			}
 
-		// Submit Count as Metric to StatsD
-		client, _ := statsd.NewClient(statsd_host, "impressions")
-		stat := "impressions"
-		fmt.Println(fmt.Sprint(stat, ":", v, "|c"))
-		errr := client.Inc(stat, v, 1)
-		if errr != nil {
-			fmt.Println("Error sending metric: %+v", errr)
+			defer g.Conn.Close()
+
+			err = g.Gauge(fmt.Sprintf("dogsights.%v"), 1, nil)
+
+			if err != nil {
+				// handle error
+			}
+			//OLD SUBMIT
+			client, _ := statsd.NewClient(statsd_host, "impressions")
+			stat := "impressions"
+			fmt.Println(fmt.Sprint(stat, ":", v, "|c"))
+			errr := client.Inc(stat, v, 1)
+			if errr != nil {
+				fmt.Println("Error sending metric: %+v", errr)
+			}
 		}
 		time.Sleep(time.Duration(interval) * time.Millisecond)
 	}

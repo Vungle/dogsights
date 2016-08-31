@@ -1,0 +1,33 @@
+
+kind: "ReplicationController"
+  apiVersion: "v1"
+  metadata:
+    name: "dogsights"
+    creationTimestamp: null
+  spec:
+    replicas: 1
+    selector:
+      service: "dogsights"
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          service: "dogsights"
+      spec:
+        containers:
+        - name: dogsights
+          image: vungle/dogsights
+          command: ["dogsights"]
+          env:
+            - name: INSIGHTS_API_KEY
+              valueFrom:
+              secretKeyRef:
+                name: mysecret
+                key: username
+            - name: DATADOG_API_KEY
+              valueFrom:
+              secretKeyRef:
+                name: mysecret
+                key: username
+            - name: DOGSIGHTS_INTERVAL
+              value: "10000"
